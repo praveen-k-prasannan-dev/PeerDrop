@@ -25,8 +25,12 @@ export default defineConfig(() => ({
         }
       : undefined,
     watch: {
-      // 3. tell Vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      // 3. tell Vite to ignore watching `src-tauri` and Cargo's build output.
+      // The Cargo workspace root sits at the project root (not nested under
+      // src-tauri), so `target/` must be excluded explicitly too - otherwise
+      // Vite's watcher trips over build artifacts being written mid-compile
+      // (fatal EBUSY crash on Windows, silently ignored on macOS).
+      ignored: ["**/src-tauri/**", "**/target/**"],
     },
   },
 }));
