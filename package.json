@@ -1,5 +1,5 @@
 {
-  "name": "filetransfer",
+  "name": "peerdrop",
   "version": "0.1.0",
   "description": "Secure LAN file/folder transfer between Windows and Mac",
   "type": "module",

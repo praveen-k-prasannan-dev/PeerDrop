@@ -991,19 +991,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "filetransfer"
-version = "0.1.0"
-dependencies = [
- "ft-app",
- "ft-core",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-opener",
-]
-
-[[package]]
 name = "find-msvc-tools"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2516,6 +2503,19 @@ dependencies = [
  "redox_syscall 0.5.18",
  "smallvec",
  "windows-link 0.2.1",
+]
+
+[[package]]
+name = "peerdrop"
+version = "0.1.0"
+dependencies = [
+ "ft-app",
+ "ft-core",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-opener",
 ]
 
 [[package]]
