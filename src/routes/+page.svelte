@@ -1,5 +1,7 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import { listen } from "@tauri-apps/api/event";
+  import { onMount } from "svelte";
 
   let name = $state("");
   let greetMsg = $state("");
@@ -9,6 +11,29 @@
     // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
     greetMsg = await invoke("greet", { name });
   }
+
+  type DiscoveredDevice = {
+    id: string;
+    name: string;
+    os: string;
+    port: number;
+    addresses: string[];
+  };
+
+  let devices = $state<DiscoveredDevice[]>([]);
+
+  onMount(() => {
+    invoke("start_discovery").catch((e) => console.error("start_discovery failed", e));
+    invoke<DiscoveredDevice[]>("get_discovered_devices").then((d) => (devices = d));
+
+    const unlisten = listen<DiscoveredDevice[]>("devices-updated", (event) => {
+      devices = event.payload;
+    });
+
+    return () => {
+      unlisten.then((f) => f());
+    };
+  });
 </script>
 
 <main class="container">
@@ -32,6 +57,20 @@
     <button type="submit">Greet</button>
   </form>
   <p>{greetMsg}</p>
+
+  <hr />
+  <h2>Devices on this network</h2>
+  {#if devices.length === 0}
+    <p><em>No other FileTransfer devices found yet…</em></p>
+  {:else}
+    <ul class="device-list">
+      {#each devices as device (device.id)}
+        <li>
+          <strong>{device.name}</strong> ({device.os}) — {device.addresses.join(", ")}:{device.port}
+        </li>
+      {/each}
+    </ul>
+  {/if}
 </main>
 
 <style>
@@ -131,6 +170,21 @@ button {
 
 #greet-input {
   margin-right: 5px;
+}
+
+.device-list {
+  list-style: none;
+  padding: 0;
+  max-width: 480px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.device-list li {
+  padding: 0.5em 0.8em;
+  margin-bottom: 0.4em;
+  background-color: rgba(127, 127, 127, 0.1);
+  border-radius: 6px;
 }
 
 @media (prefers-color-scheme: dark) {
