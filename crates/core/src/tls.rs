@@ -110,6 +110,12 @@ pub fn client_config_trust_anyone(identity: &Identity) -> Arc<ClientConfig> {
     Arc::new(config)
 }
 
+/// The certificate the peer presented during the handshake, on either a client- or
+/// server-initiated connection (see [`tokio_rustls::TlsStream`]'s unified enum).
+pub fn peer_certificate<IO>(stream: &tokio_rustls::TlsStream<IO>) -> Option<CertificateDer<'static>> {
+    stream.get_ref().1.peer_certificates()?.first().cloned()
+}
+
 /// A mutual-TLS server config that presents `identity` and accepts any peer certificate.
 pub fn server_config_trust_anyone(identity: &Identity) -> Arc<ServerConfig> {
     let provider = Arc::new(rustls::crypto::ring::default_provider());

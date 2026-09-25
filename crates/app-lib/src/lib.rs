@@ -2,6 +2,7 @@
 //! primitives into app state and events. Filled in milestone by milestone.
 
 pub mod discovery_service;
+pub mod pairing_service;
 
 pub fn core_version() -> &'static str {
     ft_core::version()

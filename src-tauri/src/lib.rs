@@ -25,7 +25,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             commands::discovery::start_discovery,
-            commands::discovery::get_discovered_devices
+            commands::discovery::get_discovered_devices,
+            commands::pairing::initiate_pairing,
+            commands::pairing::confirm_pairing,
+            commands::trust::list_trusted_devices,
+            commands::trust::forget_device
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -20,18 +20,102 @@
     addresses: string[];
   };
 
+  type TrustedDevice = {
+    device_id: string;
+    display_name: string;
+    os: string;
+    auto_accept: boolean;
+    paired_at: number;
+    last_seen_at: number | null;
+  };
+
+  type PairingRequested = {
+    device_id: string;
+    device_name: string;
+    os: string;
+    pin: number;
+  };
+
+  type PairingResultEvent = {
+    device_id: string;
+    success: boolean;
+    reason: string | null;
+  };
+
   let devices = $state<DiscoveredDevice[]>([]);
+  let trustedDevices = $state<TrustedDevice[]>([]);
+  let pairingRequest = $state<PairingRequested | null>(null);
+  let statusMessage = $state("");
+
+  function isPaired(deviceId: string): boolean {
+    return trustedDevices.some((d) => d.device_id === deviceId);
+  }
+
+  async function loadTrustedDevices() {
+    try {
+      trustedDevices = await invoke<TrustedDevice[]>("list_trusted_devices");
+    } catch (e) {
+      console.error("list_trusted_devices failed", e);
+    }
+  }
+
+  async function pairWith(deviceId: string) {
+    statusMessage = "";
+    try {
+      await invoke("initiate_pairing", { deviceId });
+    } catch (e) {
+      statusMessage = `Failed to start pairing: ${e}`;
+    }
+  }
+
+  async function respondToPairing(confirmed: boolean) {
+    if (!pairingRequest) return;
+    const deviceId = pairingRequest.device_id;
+    pairingRequest = null;
+    try {
+      await invoke("confirm_pairing", { deviceId, confirmed });
+    } catch (e) {
+      statusMessage = `Failed to send response: ${e}`;
+    }
+  }
+
+  async function forget(deviceId: string) {
+    try {
+      await invoke("forget_device", { deviceId });
+      await loadTrustedDevices();
+    } catch (e) {
+      statusMessage = `Failed to forget device: ${e}`;
+    }
+  }
 
   onMount(() => {
     invoke("start_discovery").catch((e) => console.error("start_discovery failed", e));
     invoke<DiscoveredDevice[]>("get_discovered_devices").then((d) => (devices = d));
+    loadTrustedDevices();
 
-    const unlisten = listen<DiscoveredDevice[]>("devices-updated", (event) => {
+    const unlistenDevices = listen<DiscoveredDevice[]>("devices-updated", (event) => {
       devices = event.payload;
     });
 
+    const unlistenPairingRequested = listen<PairingRequested>("pairing-requested", (event) => {
+      pairingRequest = event.payload;
+    });
+
+    const unlistenPairingResult = listen<PairingResultEvent>("pairing-result", (event) => {
+      const { device_id, success, reason } = event.payload;
+      statusMessage = success
+        ? `Paired with ${device_id}.`
+        : `Pairing with ${device_id} failed: ${reason ?? "unknown reason"}`;
+      if (pairingRequest?.device_id === device_id) {
+        pairingRequest = null;
+      }
+      loadTrustedDevices();
+    });
+
     return () => {
-      unlisten.then((f) => f());
+      unlistenDevices.then((f) => f());
+      unlistenPairingRequested.then((f) => f());
+      unlistenPairingResult.then((f) => f());
     };
   });
 </script>
@@ -58,20 +142,60 @@
   </form>
   <p>{greetMsg}</p>
 
+  {#if statusMessage}
+    <p class="status-message">{statusMessage}</p>
+  {/if}
+
   <hr />
   <h2>Devices on this network</h2>
   {#if devices.length === 0}
-    <p><em>No other FileTransfer devices found yet…</em></p>
+    <p><em>No other PeerDrop devices found yet…</em></p>
   {:else}
     <ul class="device-list">
       {#each devices as device (device.id)}
         <li>
-          <strong>{device.name}</strong> ({device.os}) — {device.addresses.join(", ")}:{device.port}
+          <div>
+            <strong>{device.name}</strong> ({device.os}) — {device.addresses.join(", ")}:{device.port}
+          </div>
+          {#if isPaired(device.id)}
+            <span class="badge">Paired</span>
+          {:else}
+            <button onclick={() => pairWith(device.id)}>Pair</button>
+          {/if}
+        </li>
+      {/each}
+    </ul>
+  {/if}
+
+  <hr />
+  <h2>Paired devices</h2>
+  {#if trustedDevices.length === 0}
+    <p><em>No paired devices yet.</em></p>
+  {:else}
+    <ul class="device-list">
+      {#each trustedDevices as device (device.device_id)}
+        <li>
+          <div><strong>{device.display_name}</strong> ({device.os})</div>
+          <button onclick={() => forget(device.device_id)}>Forget</button>
         </li>
       {/each}
     </ul>
   {/if}
 </main>
+
+{#if pairingRequest}
+  <div class="modal-backdrop">
+    <div class="modal">
+      <h2>Pair with {pairingRequest.device_name}?</h2>
+      <p>Confirm this code matches on both devices:</p>
+      <p class="pin">{pairingRequest.pin.toString().padStart(6, "0")}</p>
+      <div class="row">
+        <button onclick={() => respondToPairing(true)}>Confirm match</button>
+        <button onclick={() => respondToPairing(false)}>Cancel</button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
 .logo.vite:hover {
@@ -181,10 +305,56 @@ button {
 }
 
 .device-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
   padding: 0.5em 0.8em;
   margin-bottom: 0.4em;
   background-color: rgba(127, 127, 127, 0.1);
   border-radius: 6px;
+  text-align: left;
+}
+
+.badge {
+  padding: 0.3em 0.7em;
+  border-radius: 999px;
+  background-color: rgba(52, 168, 83, 0.2);
+  font-size: 0.85em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.status-message {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal {
+  background-color: #f6f6f6;
+  color: #0f0f0f;
+  border-radius: 12px;
+  padding: 2em;
+  max-width: 360px;
+  text-align: center;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+}
+
+.pin {
+  font-size: 2.5em;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  margin: 0.3em 0;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -204,6 +374,11 @@ button {
   }
   button:active {
     background-color: #0f0f0f69;
+  }
+
+  .modal {
+    background-color: #2f2f2f;
+    color: #f6f6f6;
   }
 }
 

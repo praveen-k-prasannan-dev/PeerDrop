@@ -3,8 +3,10 @@
 
 pub mod discovery;
 pub mod identity;
+pub mod pairing;
 pub mod settings;
 pub mod tls;
+pub mod trust_store;
 
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
